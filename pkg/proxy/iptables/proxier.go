@@ -459,13 +459,12 @@ func (proxier *Proxier) syncProxyRules() {
 	glog.V(3).Infof("Syncing iptables rules")
 
 	// Ensure main chains and rules are installed.
-	if _, err := proxier.iptables.EnsureChain(utiliptables.TableFilter, iptablesServicesChain); err != nil {
-		glog.Errorf("Failed to ensure that filter chain %s exists: %v", iptablesServicesChain, err)
-		return
-	}
-	if _, err := proxier.iptables.EnsureChain(utiliptables.TableNAT, iptablesServicesChain); err != nil {
-		glog.Errorf("Failed to ensure that nat chain %s exists: %v", iptablesServicesChain, err)
-		return
+	tablesNeedServicesChain := []utiliptables.Table{utiliptables.TableFilter, utiliptables.TableNAT}
+	for _, table := range tablesNeedServicesChain {
+		if _, err := proxier.iptables.EnsureChain(table, iptablesServicesChain); err != nil {
+			glog.Errorf("Failed to ensure that %s chain %s exists: %v", table, iptablesServicesChain, err)
+			return
+		}
 	}
 	// Link the services chain.
 	chain := utiliptables.ChainOutput
@@ -477,7 +476,6 @@ func (proxier *Proxier) syncProxyRules() {
 	}
 	inputChains := []utiliptables.Chain{utiliptables.ChainOutput, utiliptables.ChainPrerouting}
 	for _, chain := range inputChains {
-		args := []string{"-m", "comment", "--comment", comment, "-j", string(iptablesServicesChain)}
 		if _, err := proxier.iptables.EnsureRule(utiliptables.Prepend, utiliptables.TableNAT, chain, args...); err != nil {
 			glog.Errorf("Failed to ensure that nat chain %s jumps to %s: %v", chain, iptablesServicesChain, err)
 			return
@@ -503,12 +501,12 @@ func (proxier *Proxier) syncProxyRules() {
 		existingFilterChains = getChainLines(utiliptables.TableFilter, iptablesSaveRaw)
 	}
 
-	existingNatChains := make(map[utiliptables.Chain]string)
+	existingNATChains := make(map[utiliptables.Chain]string)
 	iptablesSaveRaw, err = proxier.iptables.Save(utiliptables.TableNAT)
 	if err != nil { // if we failed to get any rules
 		glog.Errorf("Failed to execute iptables-save, syncing all rules. %s", err.Error())
 	} else { // otherwise parse the output
-		existingNatChains = getChainLines(utiliptables.TableNAT, iptablesSaveRaw)
+		existingNATChains = getChainLines(utiliptables.TableNAT, iptablesSaveRaw)
 	}
 
 	filterChains := bytes.NewBuffer(nil)
@@ -527,19 +525,19 @@ func (proxier *Proxier) syncProxyRules() {
 	} else {
 		writeLine(filterChains, makeChainLine(iptablesServicesChain))
 	}
-	if chain, ok := existingNatChains[iptablesServicesChain]; ok {
+	if chain, ok := existingNATChains[iptablesServicesChain]; ok {
 		writeLine(natChains, chain)
 	} else {
 		writeLine(natChains, makeChainLine(iptablesServicesChain))
 	}
-	if chain, ok := existingNatChains[iptablesNodePortsChain]; ok {
+	if chain, ok := existingNATChains[iptablesNodePortsChain]; ok {
 		writeLine(natChains, chain)
 	} else {
 		writeLine(natChains, makeChainLine(iptablesNodePortsChain))
 	}
 
 	// Accumulate nat chains to keep.
-	activeNatChains := map[utiliptables.Chain]bool{} // use a map as a set
+	activeNATChains := map[utiliptables.Chain]bool{} // use a map as a set
 
 	// Accumulate new local ports that we have opened.
 	newLocalPorts := map[localPort]closeable{}
@@ -550,12 +548,12 @@ func (proxier *Proxier) syncProxyRules() {
 
 		// Create the per-service chain, retaining counters if possible.
 		svcChain := servicePortChainName(svcName, protocol)
-		if chain, ok := existingNatChains[svcChain]; ok {
+		if chain, ok := existingNATChains[svcChain]; ok {
 			writeLine(natChains, chain)
 		} else {
 			writeLine(natChains, makeChainLine(svcChain))
 		}
-		activeNatChains[svcChain] = true
+		activeNATChains[svcChain] = true
 
 		// Capture the clusterIP.
 		args := []string{
@@ -703,12 +701,12 @@ func (proxier *Proxier) syncProxyRules() {
 			endpointChains = append(endpointChains, endpointChain)
 
 			// Create the endpoint chain, retaining counters if possible.
-			if chain, ok := existingNatChains[utiliptables.Chain(endpointChain)]; ok {
+			if chain, ok := existingNATChains[utiliptables.Chain(endpointChain)]; ok {
 				writeLine(natChains, chain)
 			} else {
 				writeLine(natChains, makeChainLine(endpointChain))
 			}
-			activeNatChains[endpointChain] = true
+			activeNATChains[endpointChain] = true
 		}
 
 		// First write session affinity rules, if applicable.
@@ -769,7 +767,20 @@ func (proxier *Proxier) syncProxyRules() {
 	}
 
 	// Delete chains no longer in use.
-	flushUnusedChains(existingNatChains, activeNatChains, natChains, natRules)
+	for chain := range existingNATChains {
+		if !activeNATChains[chain] {
+			chainString := string(chain)
+			if !strings.HasPrefix(chainString, "KUBE-SVC-") && !strings.HasPrefix(chainString, "KUBE-SEP-") {
+				// Ignore chains that aren't ours.
+				continue
+			}
+			// We must (as per iptables) write a chain-line for it, which has
+			// the nice effect of flushing the chain.  Then we can remove the
+			// chain.
+			writeLine(natChains, existingNATChains[chain])
+			writeLine(natRules, "-X", chainString)
+		}
+	}
 
 	// Finally, tail-call to the nodeports chain.  This needs to be after all
 	// other service portal rules.
@@ -850,24 +861,6 @@ func getChainLines(table utiliptables.Table, save []byte) map[utiliptables.Chain
 		}
 	}
 	return chainsMap
-}
-
-// flushUnusedChains checks whether existing chains are still active, if not it flushes the chain.
-func flushUnusedChains(existingChains map[utiliptables.Chain]string, activeChains map[utiliptables.Chain]bool, outChains *bytes.Buffer, outRules *bytes.Buffer) {
-	for chain := range existingChains {
-		if !activeChains[chain] {
-			chainString := string(chain)
-			if !strings.HasPrefix(chainString, "KUBE-SVC-") && !strings.HasPrefix(chainString, "KUBE-SEP-") {
-				// Ignore chains that aren't ours.
-				continue
-			}
-			// We must (as per iptables) write a chain-line for it, which has
-			// the nice effect of flushing the chain.  Then we can remove the
-			// chain.
-			writeLine(outChains, existingChains[chain])
-			writeLine(outRules, "-X", chainString)
-		}
-	}
 }
 
 func readLine(readIndex int, byteArray []byte) (string, int) {
