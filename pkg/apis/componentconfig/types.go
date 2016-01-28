@@ -31,6 +31,8 @@ type KubeProxyConfiguration struct {
 	HealthzPort int `json:"healthzPort"`
 	// hostnameOverride, if non-empty, will be used as the identity instead of the actual hostname.
 	HostnameOverride string `json:"hostnameOverride"`
+	// iptablesMasqueradeMark is the mark to use for SNAT if using the pure iptables proxy mode.
+	IPTablesMasqueradeMark string `json:"iptablesMasqueradeMark"`
 	// iptablesSyncPeriodSeconds is the period that iptables rules are refreshed (e.g. '5s', '1m', '2h22m').  Must be greater than 0.
 	IPTablesSyncePeriodSeconds int `json:"iptablesSyncPeriodSeconds"`
 	// kubeAPIBurst is the burst to use while talking with kubernetes apiserver
