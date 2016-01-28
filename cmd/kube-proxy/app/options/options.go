@@ -45,6 +45,8 @@ type ProxyServerConfig struct {
 	PortRange                      utilnet.PortRange
 	HostnameOverride               string
 	ProxyMode                      string
+	IptablesMarkMask               int32
+	IptablesMarkValue              int32
 	IptablesSyncPeriod             time.Duration
 	ConfigSyncPeriod               time.Duration
 	NodeRef                        *api.ObjectReference // Reference to this node.
@@ -64,6 +66,8 @@ func NewProxyConfig() *ProxyServerConfig {
 		HealthzBindAddress:             net.ParseIP("127.0.0.1"),
 		OOMScoreAdj:                    qos.KubeProxyOOMScoreAdj,
 		ResourceContainer:              "/kube-proxy",
+		IptablesMarkMask:               0xffff0000,
+		IptablesMarkValue:              0x4d410000,
 		IptablesSyncPeriod:             30 * time.Second,
 		ConfigSyncPeriod:               15 * time.Minute,
 		KubeAPIQPS:                     5.0,
@@ -87,6 +91,8 @@ func (s *ProxyServerConfig) AddFlags(fs *pflag.FlagSet) {
 	fs.Var(&s.PortRange, "proxy-port-range", "Range of host ports (beginPort-endPort, inclusive) that may be consumed in order to proxy service traffic. If unspecified (0-0) then ports will be randomly chosen.")
 	fs.StringVar(&s.HostnameOverride, "hostname-override", s.HostnameOverride, "If non-empty, will use this string as identification instead of the actual hostname.")
 	fs.StringVar(&s.ProxyMode, "proxy-mode", "", "Which proxy mode to use: 'userspace' (older) or 'iptables' (faster). If blank, look at the Node object on the Kubernetes API and respect the '"+ExperimentalProxyModeAnnotation+"' annotation if provided.  Otherwise use the best-available proxy (currently iptables).  If the iptables proxy is selected, regardless of how, but the system's kernel or iptables versions are insufficient, this always falls back to the userspace proxy.")
+	fs.Int32Var(&s.IptablesMarkMask, "iptables-mark-mask", s.IptablesMarkMask, "If using the pure iptables proxy, the mask to use for the SNAT iptables mark.")
+	fs.Int32Var(&s.IptablesMarkValue, "iptables-mark-value", s.IptablesMarkValue, "If using the pure iptables proxy, the value to use for the SNAT iptables mark.  Must be non-zero after masking with iptables-mark-mask.")
 	fs.DurationVar(&s.IptablesSyncPeriod, "iptables-sync-period", s.IptablesSyncPeriod, "How often iptables rules are refreshed (e.g. '5s', '1m', '2h22m').  Must be greater than 0.")
 	fs.DurationVar(&s.ConfigSyncPeriod, "config-sync-period", s.ConfigSyncPeriod, "How often configuration from the apiserver is refreshed.  Must be greater than 0.")
 	fs.BoolVar(&s.MasqueradeAll, "masquerade-all", false, "If using the pure iptables proxy, SNAT everything")
