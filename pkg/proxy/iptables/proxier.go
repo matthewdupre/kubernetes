@@ -191,7 +191,7 @@ func NewProxier(ipt utiliptables.Interface, exec utilexec.Interface, syncPeriod 
 
 // CleanupLeftovers removes all iptables rules and chains created by the Proxier
 // It returns true if an error was encountered. Errors are logged.
-func CleanupLeftovers(ipt utiliptables.Interface) (encounteredError bool) {
+func CleanupLeftovers(ipt utiliptables.Interface, masqueradeMask string) (encounteredError bool) {
 	//TODO: actually tear down all rules and chains.
 	args := []string{"-m", "comment", "--comment", "kubernetes service portals", "-j", string(iptablesServicesChain)}
 	if err := ipt.DeleteRule(utiliptables.TableNAT, utiliptables.ChainOutput, args...); err != nil {
@@ -203,7 +203,7 @@ func CleanupLeftovers(ipt utiliptables.Interface) (encounteredError bool) {
 		encounteredError = true
 	}
 
-	args = []string{"-m", "comment", "--comment", "kubernetes service traffic requiring SNAT", "-m", "mark", "--mark", iptablesMasqueradeMark, "-j", "MASQUERADE"}
+	args = []string{"-m", "comment", "--comment", "kubernetes service traffic requiring SNAT", "-m", "mark", "--mark", masqueradeMask, "-j", "MASQUERADE"}
 	if err := ipt.DeleteRule(utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); err != nil {
 		glog.Errorf("Error removing pure-iptables proxy rule: %v", err)
 		encounteredError = true
@@ -540,7 +540,7 @@ func (proxier *Proxier) syncProxyRules() {
 		}
 		if proxier.masqueradeAll {
 			writeLine(rulesLines, append(args,
-				"-j", "MARK", "--set-xmark", fmt.Sprintf("%s/0xffffffff", iptablesMasqueradeMark))...)
+				"-j", "MARK", "--set-xmark", proxier.iptablesMasqueradeMark)...)
 		}
 		writeLine(rulesLines, append(args,
 			"-j", string(svcChain))...)
@@ -579,7 +579,7 @@ func (proxier *Proxier) syncProxyRules() {
 			}
 			// We have to SNAT packets to external IPs.
 			writeLine(rulesLines, append(args,
-				"-j", "MARK", "--set-xmark", fmt.Sprintf("%s/0xffffffff", iptablesMasqueradeMark))...)
+				"-j", "MARK", "--set-xmark", proxier.iptablesMasqueradeMark)...)
 
 			// Allow traffic for external IPs that does not come from a bridge (i.e. not from a container)
 			// nor from a local process to be forwarded to the service.
@@ -609,7 +609,7 @@ func (proxier *Proxier) syncProxyRules() {
 				}
 				// We have to SNAT packets from external IPs.
 				writeLine(rulesLines, append(args,
-					"-j", "MARK", "--set-xmark", fmt.Sprintf("%s/0xffffffff", iptablesMasqueradeMark))...)
+					"-j", "MARK", "--set-xmark", proxier.iptablesMasqueradeMark)...)
 				writeLine(rulesLines, append(args,
 					"-j", string(svcChain))...)
 			}
@@ -643,7 +643,7 @@ func (proxier *Proxier) syncProxyRules() {
 				"-m", "comment", "--comment", svcName.String(),
 				"-m", protocol, "-p", protocol,
 				"--dport", fmt.Sprintf("%d", svcInfo.nodePort),
-				"-j", "MARK", "--set-xmark", fmt.Sprintf("%s/0xffffffff", iptablesMasqueradeMark))
+				"-j", "MARK", "--set-xmark", proxier.iptablesMasqueradeMark)
 			// Jump to the service chain.
 			writeLine(rulesLines,
 				"-A", string(iptablesNodePortsChain),
@@ -714,7 +714,7 @@ func (proxier *Proxier) syncProxyRules() {
 			// TODO: if we grow logic to get this node's pod CIDR, we can use it.
 			writeLine(rulesLines, append(args,
 				"-s", fmt.Sprintf("%s/32", strings.Split(endpoints[i], ":")[0]),
-				"-j", "MARK", "--set-xmark", fmt.Sprintf("%s/0xffffffff", iptablesMasqueradeMark))...)
+				"-j", "MARK", "--set-xmark", proxier.iptablesMasqueradeMark)...)
 
 			// Update client-affinity lists.
 			if svcInfo.sessionAffinityType == api.ServiceAffinityClientIP {
