@@ -143,8 +143,7 @@ input-dirs
 insecure-bind-address
 insecure-port
 insecure-skip-tls-verify
-iptables-mark-mask
-iptables-mark-value
+iptables-masquerade-mark
 iptables-sync-period
 ir-data-source
 ir-dbname
