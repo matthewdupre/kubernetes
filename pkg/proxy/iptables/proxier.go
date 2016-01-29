@@ -215,7 +215,7 @@ func CleanupLeftovers(ipt utiliptables.Interface) (encounteredError bool) {
 		// find all lines in the nat table containing the SNAT rule, capturing the marks.
 		re, err := regexp.Compile(`(?m)^-A POSTROUTING -m comment --comment "kubernetes service traffic requiring SNAT" -m mark --mark ([0-9x\/]*) -j MASQUERADE$`)
 		result := re.FindAllStringSubmatch(natStr, -1)
-		for m := range result {
+		for _, m := range result {
 			args = []string{"-m", "comment", "--comment", "kubernetes service traffic requiring SNAT", "-m", "mark", "--mark", m[1], "-j", "MASQUERADE"}
 			if err := ipt.DeleteRule(utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); err != nil {
 				glog.Errorf("Error removing pure-iptables proxy rule: %v", err)
