@@ -203,6 +203,15 @@ func CleanupLeftovers(ipt utiliptables.Interface, masqueradeMask string) (encoun
 		encounteredError = true
 	}
 
+	// masquerade rules might have been created with a different mark, so delete them all.
+	nat, natErr := ipt.Save(utiliptables.TableNAT)
+	if natErr != nil {
+		glog.Errorf("Error removing pure-iptables proxy SNAT rules: %v", natErr)
+		encounteredError = true
+	} else {
+		glog.Errorf("MD4 TEMP: %v", nat)
+	}
+
 	args = []string{"-m", "comment", "--comment", "kubernetes service traffic requiring SNAT", "-m", "mark", "--mark", masqueradeMask, "-j", "MASQUERADE"}
 	if err := ipt.DeleteRule(utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); err != nil {
 		glog.Errorf("Error removing pure-iptables proxy rule: %v", err)
