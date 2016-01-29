@@ -39,6 +39,7 @@ func deepCopy_v1alpha1_KubeProxyConfiguration(in KubeProxyConfiguration, out *Ku
 	out.HealthzBindAddress = in.HealthzBindAddress
 	out.HealthzPort = in.HealthzPort
 	out.HostnameOverride = in.HostnameOverride
+	out.IPTablesMasqueradeMark = in.IPTablesMasqueradeMark
 	out.IPTablesSyncePeriodSeconds = in.IPTablesSyncePeriodSeconds
 	out.KubeAPIBurst = in.KubeAPIBurst
 	out.KubeAPIQPS = in.KubeAPIQPS
