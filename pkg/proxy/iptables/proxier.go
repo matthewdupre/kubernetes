@@ -213,7 +213,7 @@ func CleanupLeftovers(ipt utiliptables.Interface) (encounteredError bool) {
 		glog.Errorf("MD4 TEMP: %v", nat)
 		natStr := string(nat)
 		// find all lines in the nat table containing the SNAT rule, capturing the marks.
-		re, err := rexexp.Compile(`(?m)^-A POSTROUTING -m comment --comment "kubernetes service traffic requiring SNAT" -m mark --mark ([0-9x\/]*) -j MASQUERADE$`)
+		re, err := regexp.Compile(`(?m)^-A POSTROUTING -m comment --comment "kubernetes service traffic requiring SNAT" -m mark --mark ([0-9x\/]*) -j MASQUERADE$`)
 		result := re.FindAllStringSubmatch(natStr, -1)
 		for m := range result {
 			args = []string{"-m", "comment", "--comment", "kubernetes service traffic requiring SNAT", "-m", "mark", "--mark", m[1], "-j", "MASQUERADE"}
