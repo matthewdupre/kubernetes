@@ -211,9 +211,10 @@ func CleanupLeftovers(ipt utiliptables.Interface) (encounteredError bool) {
 		encounteredError = true
 	} else {
 		// find all lines in the nat table containing the SNAT rule, capturing the marks.
-		re, err := regexp.Compile(`(?m)^-A POSTROUTING -m comment --comment "kubernetes service traffic requiring SNAT" -m mark --mark ([0-9x\/]*) -j MASQUERADE$`)
+		re, err := regexp.Compile(`(?m)^-A POSTROUTING -m comment --comment "kubernetes service traffic requiring SNAT" -m mark --mark ([0-9a-fx\/]*) -j MASQUERADE$`)
 		if err != nil {
 			glog.Errorf("Failed to compile SNAT rule matching regexp: %v", err)
+			encounteredError = true
 		}
 
 		result := re.FindAllStringSubmatch(string(nat), -1)
