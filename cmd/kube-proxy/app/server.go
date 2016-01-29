@@ -247,7 +247,7 @@ func (s *ProxyServer) Run() error {
 	// remove iptables rules and exit
 	if s.Config.CleanupAndExit {
 		encounteredError := userspace.CleanupLeftovers(s.IptInterface)
-		encounteredError = iptables.CleanupLeftovers(s.IptInterface, s.Config.IptablesMasqueradeMark) || encounteredError
+		encounteredError = iptables.CleanupLeftovers(s.IptInterface) || encounteredError
 		if encounteredError {
 			return errors.New("Encountered an error while tearing down rules.")
 		}
