@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -191,7 +192,7 @@ func NewProxier(ipt utiliptables.Interface, exec utilexec.Interface, syncPeriod 
 
 // CleanupLeftovers removes all iptables rules and chains created by the Proxier
 // It returns true if an error was encountered. Errors are logged.
-func CleanupLeftovers(ipt utiliptables.Interface, masqueradeMask string) (encounteredError bool) {
+func CleanupLeftovers(ipt utiliptables.Interface) (encounteredError bool) {
 	//TODO: actually tear down all rules and chains.
 	args := []string{"-m", "comment", "--comment", "kubernetes service portals", "-j", string(iptablesServicesChain)}
 	if err := ipt.DeleteRule(utiliptables.TableNAT, utiliptables.ChainOutput, args...); err != nil {
@@ -210,12 +211,17 @@ func CleanupLeftovers(ipt utiliptables.Interface, masqueradeMask string) (encoun
 		encounteredError = true
 	} else {
 		glog.Errorf("MD4 TEMP: %v", nat)
-	}
-
-	args = []string{"-m", "comment", "--comment", "kubernetes service traffic requiring SNAT", "-m", "mark", "--mark", masqueradeMask, "-j", "MASQUERADE"}
-	if err := ipt.DeleteRule(utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); err != nil {
-		glog.Errorf("Error removing pure-iptables proxy rule: %v", err)
-		encounteredError = true
+		natStr := string(nat)
+		// find all lines in the nat table containing the SNAT rule, capturing the marks.
+		re, err := rexexp.Compile(`(?m)^-A POSTROUTING -m comment --comment "kubernetes service traffic requiring SNAT" -m mark --mark ([0-9x\/]*) -j MASQUERADE$`)
+		result := re.FindAllStringSubmatch(natStr, -1)
+		for m := range result {
+			args = []string{"-m", "comment", "--comment", "kubernetes service traffic requiring SNAT", "-m", "mark", "--mark", m[1], "-j", "MASQUERADE"}
+			if err := ipt.DeleteRule(utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); err != nil {
+				glog.Errorf("Error removing pure-iptables proxy rule: %v", err)
+				encounteredError = true
+			}
+		}
 	}
 
 	// flush and delete chains.

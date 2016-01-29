@@ -209,7 +209,7 @@ func NewProxyServerDefault(config *options.ProxyServerConfig) (*ProxyServer, err
 		proxier = proxierUserspace
 		// Remove artifacts from the pure-iptables Proxier.
 		glog.V(2).Info("Tearing down pure-iptables proxy rules. Errors here are acceptable.")
-		iptables.CleanupLeftovers(iptInterface, config.IptablesMasqueradeMark)
+		iptables.CleanupLeftovers(iptInterface)
 	}
 	iptInterface.AddReloadFunc(proxier.Sync)
 
