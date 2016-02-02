@@ -55,6 +55,7 @@ func NewProxyConfig() *ProxyServerConfig {
 			HealthzBindAddress:             "127.0.0.1",
 			OOMScoreAdj:                    util.IntPtr(qos.KubeProxyOOMScoreAdj),
 			ResourceContainer:              "/kube-proxy",
+			IPTablesMasqueradeMark:         "0x4d410000/0xffff0000",
 			IPTablesSyncPeriod:             unversioned.Duration{30 * time.Second},
 			UDPIdleTimeout:                 unversioned.Duration{250 * time.Millisecond},
 			Mode:                           componentconfig.ProxyModeUserspace,
@@ -80,6 +81,7 @@ func (s *ProxyServerConfig) AddFlags(fs *pflag.FlagSet) {
 	fs.Var(componentconfig.PortRangeVar{&s.PortRange}, "proxy-port-range", "Range of host ports (beginPort-endPort, inclusive) that may be consumed in order to proxy service traffic. If unspecified (0-0) then ports will be randomly chosen.")
 	fs.StringVar(&s.HostnameOverride, "hostname-override", s.HostnameOverride, "If non-empty, will use this string as identification instead of the actual hostname.")
 	fs.Var(&s.Mode, "proxy-mode", "Which proxy mode to use: 'userspace' (older) or 'iptables' (faster). If blank, look at the Node object on the Kubernetes API and respect the '"+ExperimentalProxyModeAnnotation+"' annotation if provided.  Otherwise use the best-available proxy (currently iptables).  If the iptables proxy is selected, regardless of how, but the system's kernel or iptables versions are insufficient, this always falls back to the userspace proxy.")
+	fs.StringVar(&s.IPTablesMasqueradeMark, "iptables-masquerade-mark", s.IPTablesMasqueradeMark, "If using the pure iptables proxy, the mark to use for iptables SNAT.")
 	fs.DurationVar(&s.IPTablesSyncPeriod.Duration, "iptables-sync-period", s.IPTablesSyncPeriod.Duration, "How often iptables rules are refreshed (e.g. '5s', '1m', '2h22m').  Must be greater than 0.")
 	fs.DurationVar(&s.ConfigSyncPeriod, "config-sync-period", s.ConfigSyncPeriod, "How often configuration from the apiserver is refreshed.  Must be greater than 0.")
 	fs.BoolVar(&s.MasqueradeAll, "masquerade-all", false, "If using the pure iptables proxy, SNAT everything")

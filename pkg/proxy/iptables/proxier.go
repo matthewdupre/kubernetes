@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,9 +59,6 @@ const iptablesServicesChain utiliptables.Chain = "KUBE-SERVICES"
 
 // the nodeports chain
 const iptablesNodePortsChain utiliptables.Chain = "KUBE-NODEPORTS"
-
-// the mark we apply to traffic needing SNAT
-const iptablesMasqueradeMark = "0x4d415351"
 
 // IptablesVersioner can query the current iptables version.
 type IptablesVersioner interface {
@@ -138,9 +136,10 @@ type Proxier struct {
 	haveReceivedEndpointsUpdate bool // true once we've seen an OnEndpointsUpdate event
 
 	// These are effectively const and do not need the mutex to be held.
-	syncPeriod    time.Duration
-	iptables      utiliptables.Interface
-	masqueradeAll bool
+	syncPeriod             time.Duration
+	iptables               utiliptables.Interface
+	masqueradeAll          bool
+	iptablesMasqueradeMark string
 }
 
 type localPort struct {
@@ -166,7 +165,7 @@ var _ proxy.ProxyProvider = &Proxier{}
 // An error will be returned if iptables fails to update or acquire the initial lock.
 // Once a proxier is created, it will keep iptables up to date in the background and
 // will not terminate if a particular iptables call fails.
-func NewProxier(ipt utiliptables.Interface, exec utilexec.Interface, syncPeriod time.Duration, masqueradeAll bool) (*Proxier, error) {
+func NewProxier(ipt utiliptables.Interface, exec utilexec.Interface, syncPeriod time.Duration, masqueradeAll bool, iptablesMasqueradeMark string) (*Proxier, error) {
 	// Set the route_localnet sysctl we need for
 	if err := utilsysctl.SetSysctl(sysctlRouteLocalnet, 1); err != nil {
 		return nil, fmt.Errorf("can't set sysctl %s: %v", sysctlRouteLocalnet, err)
@@ -181,12 +180,13 @@ func NewProxier(ipt utiliptables.Interface, exec utilexec.Interface, syncPeriod 
 	}
 
 	return &Proxier{
-		serviceMap:    make(map[proxy.ServicePortName]*serviceInfo),
-		endpointsMap:  make(map[proxy.ServicePortName][]string),
-		portsMap:      make(map[localPort]closeable),
-		syncPeriod:    syncPeriod,
-		iptables:      ipt,
-		masqueradeAll: masqueradeAll,
+		serviceMap:             make(map[proxy.ServicePortName]*serviceInfo),
+		endpointsMap:           make(map[proxy.ServicePortName][]string),
+		portsMap:               make(map[localPort]closeable),
+		syncPeriod:             syncPeriod,
+		iptables:               ipt,
+		masqueradeAll:          masqueradeAll,
+		iptablesMasqueradeMark: iptablesMasqueradeMark,
 	}, nil
 }
 
@@ -204,11 +204,8 @@ func CleanupLeftovers(ipt utiliptables.Interface) (encounteredError bool) {
 		encounteredError = true
 	}
 
-	args = []string{"-m", "comment", "--comment", "kubernetes service traffic requiring SNAT", "-m", "mark", "--mark", iptablesMasqueradeMark, "-j", "MASQUERADE"}
-	if err := ipt.DeleteRule(utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); err != nil {
-		glog.Errorf("Error removing pure-iptables proxy rule: %v", err)
-		encounteredError = true
-	}
+	// remove all masquerade rules from the POSTROUTING chain.
+	encounteredError = ensureMasqueradeRuleOnly(ipt, "") || encounteredError
 
 	// flush and delete chains.
 	chains := []utiliptables.Chain{iptablesServicesChain, iptablesNodePortsChain}
@@ -222,6 +219,49 @@ func CleanupLeftovers(ipt utiliptables.Interface) (encounteredError bool) {
 				glog.Errorf("Error deleting pure-iptables proxy chain: %v", err)
 				encounteredError = true
 			}
+		}
+	}
+	return encounteredError
+}
+
+// ensureMasqueradeRuleOnly removes all SNAT masquerade rules from the POSTROUTING chain other than the one matching the provided mark.
+// It then creates the rule with the passed mark (if nonempty).
+func ensureMasqueradeRuleOnly(ipt utiliptables.Interface, iptablesMasqueradeMark string) (encounteredError bool) {
+	// masquerade rules might have been created with a different mark, so delete all the other ones.
+	natSave, natErr := ipt.Save(utiliptables.TableNAT)
+	if natErr != nil {
+		glog.Errorf("Error checking for pure-iptables proxy SNAT rules: %v", natErr)
+		encounteredError = true
+	} else {
+		// find all lines in the nat table containing the SNAT rule, capturing the marks.
+		re, reErr := regexp.Compile(`(?m)^-A POSTROUTING -m comment --comment "kubernetes service traffic requiring SNAT" -m mark --mark ([0-9a-fx\/]*) -j MASQUERADE$`)
+		if reErr != nil {
+			glog.Errorf("Error compiling SNAT rule matching regexp: %v", reErr)
+			encounteredError = true
+		} else {
+			result := re.FindAllStringSubmatch(string(natSave), -1)
+			for _, m := range result {
+				if m[1] == iptablesMasqueradeMark {
+					// this is the rule we want to keep.
+					continue
+				}
+
+				args := []string{"-m", "comment", "--comment", "kubernetes service traffic requiring SNAT", "-m", "mark", "--mark", m[1], "-j", "MASQUERADE"}
+				if deleteErr := ipt.DeleteRule(utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); deleteErr != nil {
+					glog.Errorf("Error removing pure-iptables proxy rule: %v", deleteErr)
+					encounteredError = true
+				}
+			}
+		}
+	}
+
+	// ensure desired rule (if any) is present.
+	if iptablesMasqueradeMark != "" {
+		comment := "kubernetes service traffic requiring SNAT"
+		args := []string{"-m", "comment", "--comment", comment, "-m", "mark", "--mark", iptablesMasqueradeMark, "-j", "MASQUERADE"}
+		if _, err := ipt.EnsureRule(utiliptables.Append, utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); err != nil {
+			glog.Errorf("Failed to ensure that chain %s obeys MASQUERADE mark: %v", utiliptables.ChainPostrouting, err)
+			return
 		}
 	}
 	return encounteredError
@@ -473,14 +513,10 @@ func (proxier *Proxier) syncProxyRules() {
 			return
 		}
 	}
-	// Link the output rules.
-	{
-		comment := "kubernetes service traffic requiring SNAT"
-		args := []string{"-m", "comment", "--comment", comment, "-m", "mark", "--mark", iptablesMasqueradeMark, "-j", "MASQUERADE"}
-		if _, err := proxier.iptables.EnsureRule(utiliptables.Append, utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); err != nil {
-			glog.Errorf("Failed to ensure that chain %s obeys MASQUERADE mark: %v", utiliptables.ChainPostrouting, err)
-			return
-		}
+	// Link the SNAT output rules.
+	encounteredError := ensureMasqueradeRuleOnly(proxier.iptables, proxier.iptablesMasqueradeMark)
+	if encounteredError {
+		return
 	}
 
 	// Get iptables-save output so we can check for existing chains and rules.
@@ -541,7 +577,7 @@ func (proxier *Proxier) syncProxyRules() {
 		}
 		if proxier.masqueradeAll {
 			writeLine(rulesLines, append(args,
-				"-j", "MARK", "--set-xmark", fmt.Sprintf("%s/0xffffffff", iptablesMasqueradeMark))...)
+				"-j", "MARK", "--set-xmark", proxier.iptablesMasqueradeMark)...)
 		}
 		writeLine(rulesLines, append(args,
 			"-j", string(svcChain))...)
@@ -580,7 +616,7 @@ func (proxier *Proxier) syncProxyRules() {
 			}
 			// We have to SNAT packets to external IPs.
 			writeLine(rulesLines, append(args,
-				"-j", "MARK", "--set-xmark", fmt.Sprintf("%s/0xffffffff", iptablesMasqueradeMark))...)
+				"-j", "MARK", "--set-xmark", proxier.iptablesMasqueradeMark)...)
 
 			// Allow traffic for external IPs that does not come from a bridge (i.e. not from a container)
 			// nor from a local process to be forwarded to the service.
@@ -610,7 +646,7 @@ func (proxier *Proxier) syncProxyRules() {
 				}
 				// We have to SNAT packets from external IPs.
 				writeLine(rulesLines, append(args,
-					"-j", "MARK", "--set-xmark", fmt.Sprintf("%s/0xffffffff", iptablesMasqueradeMark))...)
+					"-j", "MARK", "--set-xmark", proxier.iptablesMasqueradeMark)...)
 				writeLine(rulesLines, append(args,
 					"-j", string(svcChain))...)
 			}
@@ -644,7 +680,7 @@ func (proxier *Proxier) syncProxyRules() {
 				"-m", "comment", "--comment", svcName.String(),
 				"-m", protocol, "-p", protocol,
 				"--dport", fmt.Sprintf("%d", svcInfo.nodePort),
-				"-j", "MARK", "--set-xmark", fmt.Sprintf("%s/0xffffffff", iptablesMasqueradeMark))
+				"-j", "MARK", "--set-xmark", proxier.iptablesMasqueradeMark)
 			// Jump to the service chain.
 			writeLine(rulesLines,
 				"-A", string(iptablesNodePortsChain),
@@ -715,7 +751,7 @@ func (proxier *Proxier) syncProxyRules() {
 			// TODO: if we grow logic to get this node's pod CIDR, we can use it.
 			writeLine(rulesLines, append(args,
 				"-s", fmt.Sprintf("%s/32", strings.Split(endpoints[i], ":")[0]),
-				"-j", "MARK", "--set-xmark", fmt.Sprintf("%s/0xffffffff", iptablesMasqueradeMark))...)
+				"-j", "MARK", "--set-xmark", proxier.iptablesMasqueradeMark)...)
 
 			// Update client-affinity lists.
 			if svcInfo.sessionAffinityType == api.ServiceAffinityClientIP {
