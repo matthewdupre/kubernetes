@@ -257,6 +257,7 @@ func ensureMasqueradeRuleOnly(ipt utiliptables.Interface, iptablesMasqueradeMark
 
 	// ensure desired rule (if any) is present.
 	if (iptablesMasqueradeMark != "") {
+		comment := "kubernetes service traffic requiring SNAT"
 		args := []string{"-m", "comment", "--comment", comment, "-m", "mark", "--mark", iptablesMasqueradeMark, "-j", "MASQUERADE"}
 		if _, err := ipt.EnsureRule(utiliptables.Append, utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); err != nil {
 			glog.Errorf("Failed to ensure that chain %s obeys MASQUERADE mark: %v", utiliptables.ChainPostrouting, err)
