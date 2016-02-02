@@ -514,7 +514,8 @@ func (proxier *Proxier) syncProxyRules() {
 		}
 	}
 	// Link the SNAT output rules.
-	if ensureMasqueradeRuleOnly(proxier.iptables, proxier.iptablesMasqueradeMark) {
+	encounteredError := ensureMasqueradeRuleOnly(proxier.iptables, proxier.iptablesMasqueradeMark)
+	if encounteredError {
 		return
 	}
 
