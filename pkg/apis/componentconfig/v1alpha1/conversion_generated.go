@@ -38,6 +38,7 @@ func autoConvert_componentconfig_KubeProxyConfiguration_To_v1alpha1_KubeProxyCon
 	out.HealthzBindAddress = in.HealthzBindAddress
 	out.HealthzPort = int32(in.HealthzPort)
 	out.HostnameOverride = in.HostnameOverride
+	out.IPTablesMasqueradeMark = in.IPTablesMasqueradeMark
 	out.IPTablesSyncePeriodSeconds = int32(in.IPTablesSyncePeriodSeconds)
 	out.KubeAPIBurst = int32(in.KubeAPIBurst)
 	out.KubeAPIQPS = int32(in.KubeAPIQPS)
@@ -73,6 +74,7 @@ func autoConvert_v1alpha1_KubeProxyConfiguration_To_componentconfig_KubeProxyCon
 	out.HealthzBindAddress = in.HealthzBindAddress
 	out.HealthzPort = int(in.HealthzPort)
 	out.HostnameOverride = in.HostnameOverride
+	out.IPTablesMasqueradeMark = in.IPTablesMasqueradeMark
 	out.IPTablesSyncePeriodSeconds = int(in.IPTablesSyncePeriodSeconds)
 	out.KubeAPIBurst = int(in.KubeAPIBurst)
 	out.KubeAPIQPS = int(in.KubeAPIQPS)
