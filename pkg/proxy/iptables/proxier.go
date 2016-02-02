@@ -205,7 +205,7 @@ func CleanupLeftovers(ipt utiliptables.Interface) (encounteredError bool) {
 	}
 
 	// remove all masquerade rules from the POSTROUTING chain.
-	if err ensureMasqueradeRuleOnly(ipt, "") {
+	if err := ensureMasqueradeRuleOnly(ipt, ""); err != nil {
 		encounteredError = true
 	}
 
