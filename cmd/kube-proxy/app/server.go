@@ -185,7 +185,7 @@ func NewProxyServerDefault(config *options.ProxyServerConfig) (*ProxyServer, err
 	proxyMode := getProxyMode(config.ProxyMode, client.Nodes(), hostname, iptInterface)
 	if proxyMode == proxyModeIptables {
 		glog.V(2).Info("Using iptables Proxier.")
-		proxierIptables, err := iptables.NewProxier(iptInterface, execer, config.IptablesSyncPeriod, config.MasqueradeAll)
+		proxierIptables, err := iptables.NewProxier(iptInterface, execer, config.IptablesSyncPeriod, config.MasqueradeAll, config.IptablesMasqueradeMark)
 		if err != nil {
 			glog.Fatalf("Unable to create proxier: %v", err)
 		}
