@@ -467,17 +467,19 @@ func (proxier *Proxier) syncProxyRules() {
 		}
 	}
 	// Link the services chain.
-	chain := utiliptables.ChainOutput
+	tableChainsNeedJumpServices := []struct {
+		table utiliptables.Table
+		chain utiliptables.Chain
+	}{
+		{utiliptables.TableFilter, utiliptables.ChainOutput},
+		{utiliptables.TableNAT, utiliptables.ChainOutput},
+		{utiliptables.TableNAT, utiliptables.ChainPrerouting},
+	}
 	comment := "kubernetes service portals"
 	args := []string{"-m", "comment", "--comment", comment, "-j", string(iptablesServicesChain)}
-	if _, err := proxier.iptables.EnsureRule(utiliptables.Prepend, utiliptables.TableFilter, chain, args...); err != nil {
-		glog.Errorf("Failed to ensure that filter chain %s jumps to %s: %v", chain, iptablesServicesChain, err)
-		return
-	}
-	inputChains := []utiliptables.Chain{utiliptables.ChainOutput, utiliptables.ChainPrerouting}
-	for _, chain := range inputChains {
-		if _, err := proxier.iptables.EnsureRule(utiliptables.Prepend, utiliptables.TableNAT, chain, args...); err != nil {
-			glog.Errorf("Failed to ensure that nat chain %s jumps to %s: %v", chain, iptablesServicesChain, err)
+	for _, tc := range tableChainsNeedJumpServices {
+		if _, err := proxier.iptables.EnsureRule(utiliptables.Prepend, tc.table, tc.chain, args...); err != nil {
+			glog.Errorf("Failed to ensure that %s chain %s jumps to %s: %v", tc.table, tc.chain, iptablesServicesChain, err)
 			return
 		}
 	}
