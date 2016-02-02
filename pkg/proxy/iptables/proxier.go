@@ -204,27 +204,9 @@ func CleanupLeftovers(ipt utiliptables.Interface) (encounteredError bool) {
 		encounteredError = true
 	}
 
-	// masquerade rules might have been created with a different mark, so delete them all.
-	nat, natErr := ipt.Save(utiliptables.TableNAT)
-	if natErr != nil {
-		glog.Errorf("Error removing pure-iptables proxy SNAT rules: %v", natErr)
+	// remove all masquerade rules from the POSTROUTING chain.
+	if err ensureMasqueradeRuleOnly(ipt, "") {
 		encounteredError = true
-	} else {
-		// find all lines in the nat table containing the SNAT rule, capturing the marks.
-		re, err := regexp.Compile(`(?m)^-A POSTROUTING -m comment --comment "kubernetes service traffic requiring SNAT" -m mark --mark ([0-9a-fx\/]*) -j MASQUERADE$`)
-		if err != nil {
-			glog.Errorf("Failed to compile SNAT rule matching regexp: %v", err)
-			encounteredError = true
-		}
-
-		result := re.FindAllStringSubmatch(string(nat), -1)
-		for _, m := range result {
-			args = []string{"-m", "comment", "--comment", "kubernetes service traffic requiring SNAT", "-m", "mark", "--mark", m[1], "-j", "MASQUERADE"}
-			if err := ipt.DeleteRule(utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); err != nil {
-				glog.Errorf("Error removing pure-iptables proxy rule: %v", err)
-				encounteredError = true
-			}
-		}
 	}
 
 	// flush and delete chains.
@@ -239,6 +221,48 @@ func CleanupLeftovers(ipt utiliptables.Interface) (encounteredError bool) {
 				glog.Errorf("Error deleting pure-iptables proxy chain: %v", err)
 				encounteredError = true
 			}
+		}
+	}
+	return encounteredError
+}
+
+// ensureMasqueradeRuleOnly removes all SNAT masquerade rules from the POSTROUTING chain other than the one matching the provided mark.
+// It then creates the rule with the passed mark (if nonempty).
+func ensureMasqueradeRuleOnly(ipt utiliptables.Interface, iptablesMasqueradeMark string) (encounteredError bool) {
+	// masquerade rules might have been created with a different mark, so delete all the other ones.
+	natSave, natErr := ipt.Save(utiliptables.TableNAT)
+	if natErr != nil {
+		glog.Errorf("Error checking for pure-iptables proxy SNAT rules: %v", natErr)
+		encounteredError = true
+	} else {
+		// find all lines in the nat table containing the SNAT rule, capturing the marks.
+		re, reErr := regexp.Compile(`(?m)^-A POSTROUTING -m comment --comment "kubernetes service traffic requiring SNAT" -m mark --mark ([0-9a-fx\/]*) -j MASQUERADE$`)
+		if reErr != nil {
+			glog.Errorf("Error compiling SNAT rule matching regexp: %v", reErr)
+			encounteredError = true
+		} else {
+			result := re.FindAllStringSubmatch(string(natSave), -1)
+			for _, m := range result {
+				if (m[1] == iptablesMasqueradeMark) {
+					// this is the rule we want to keep.
+					continue
+				}
+
+				args = []string{"-m", "comment", "--comment", "kubernetes service traffic requiring SNAT", "-m", "mark", "--mark", m[1], "-j", "MASQUERADE"}
+				if deleteErr := ipt.DeleteRule(utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); deleteErr != nil {
+					glog.Errorf("Error removing pure-iptables proxy rule: %v", deleteErr)
+					encounteredError = true
+				}
+			}
+		}
+	}
+
+	// ensure desired rule (if any) is present.
+	if (iptablesMasqueradeMark != "") {
+		args := []string{"-m", "comment", "--comment", comment, "-m", "mark", "--mark", iptablesMasqueradeMark, "-j", "MASQUERADE"}
+		if _, err := ipt.EnsureRule(utiliptables.Append, utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); err != nil {
+			glog.Errorf("Failed to ensure that chain %s obeys MASQUERADE mark: %v", utiliptables.ChainPostrouting, err)
+			return
 		}
 	}
 	return encounteredError
@@ -490,14 +514,9 @@ func (proxier *Proxier) syncProxyRules() {
 			return
 		}
 	}
-	// Link the output rules.
-	{
-		comment := "kubernetes service traffic requiring SNAT"
-		args := []string{"-m", "comment", "--comment", comment, "-m", "mark", "--mark", proxier.iptablesMasqueradeMark, "-j", "MASQUERADE"}
-		if _, err := proxier.iptables.EnsureRule(utiliptables.Append, utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); err != nil {
-			glog.Errorf("Failed to ensure that chain %s obeys MASQUERADE mark: %v", utiliptables.ChainPostrouting, err)
-			return
-		}
+	// Link the SNAT output rules.
+	if err := ensureMasqueradeRuleOnly(proxier.iptables, proxier.iptablesMasqueradeMark); err != nil {
+		return
 	}
 
 	// Get iptables-save output so we can check for existing chains and rules.
