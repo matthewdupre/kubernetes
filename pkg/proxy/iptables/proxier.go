@@ -205,9 +205,7 @@ func CleanupLeftovers(ipt utiliptables.Interface) (encounteredError bool) {
 	}
 
 	// remove all masquerade rules from the POSTROUTING chain.
-	if err := ensureMasqueradeRuleOnly(ipt, ""); err != nil {
-		encounteredError = true
-	}
+	encounteredError = ensureMasqueradeRuleOnly(ipt, "") || encounteredError
 
 	// flush and delete chains.
 	chains := []utiliptables.Chain{iptablesServicesChain, iptablesNodePortsChain}
@@ -248,7 +246,7 @@ func ensureMasqueradeRuleOnly(ipt utiliptables.Interface, iptablesMasqueradeMark
 					continue
 				}
 
-				args = []string{"-m", "comment", "--comment", "kubernetes service traffic requiring SNAT", "-m", "mark", "--mark", m[1], "-j", "MASQUERADE"}
+				args := []string{"-m", "comment", "--comment", "kubernetes service traffic requiring SNAT", "-m", "mark", "--mark", m[1], "-j", "MASQUERADE"}
 				if deleteErr := ipt.DeleteRule(utiliptables.TableNAT, utiliptables.ChainPostrouting, args...); deleteErr != nil {
 					glog.Errorf("Error removing pure-iptables proxy rule: %v", deleteErr)
 					encounteredError = true
@@ -515,7 +513,7 @@ func (proxier *Proxier) syncProxyRules() {
 		}
 	}
 	// Link the SNAT output rules.
-	if err := ensureMasqueradeRuleOnly(proxier.iptables, proxier.iptablesMasqueradeMark); err != nil {
+	if !ensureMasqueradeRuleOnly(proxier.iptables, proxier.iptablesMasqueradeMark) {
 		return
 	}
 
