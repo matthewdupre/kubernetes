@@ -20,6 +20,7 @@ package options
 import (
 	_ "net/http/pprof"
 	"time"
+	"fmt"
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/componentconfig"
@@ -49,6 +50,7 @@ type ProxyServerConfig struct {
 
 func NewProxyConfig() *ProxyServerConfig {
 	config := componentconfig.KubeProxyConfiguration{}
+	fmt.Println("MD4 OOMScoreAdj, IPT ", config.OOMScoreAdj, config.IPTablesMasqueradeBit)
 	api.Scheme.Convert(&v1alpha1.KubeProxyConfiguration{}, &config)
 	return &ProxyServerConfig{
 		KubeProxyConfiguration: config,
@@ -60,6 +62,8 @@ func NewProxyConfig() *ProxyServerConfig {
 
 // AddFlags adds flags for a specific ProxyServer to the specified FlagSet
 func (s *ProxyServerConfig) AddFlags(fs *pflag.FlagSet) {
+	fmt.Println("MD4 OOMScoreAdj %v, IPT %v", s.OOMScoreAdj, s.IPTablesMasqueradeBit)
+
 	fs.Var(componentconfig.IPVar{&s.BindAddress}, "bind-address", "The IP address for the proxy server to serve on (set to 0.0.0.0 for all interfaces)")
 	fs.StringVar(&s.Master, "master", s.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig)")
 	fs.IntVar(&s.HealthzPort, "healthz-port", s.HealthzPort, "The port to bind the health check server. Use 0 to disable.")
