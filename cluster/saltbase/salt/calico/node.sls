@@ -50,7 +50,6 @@ calico-restart-kubelet:
     - name: service kubelet restart
     - require:
       - file: calico-cni
-      - file: host-local
       - file: calico-cni-config
       - cmd: calico-node
       - service: kubelet
