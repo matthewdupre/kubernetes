@@ -3,16 +3,8 @@
 calicoctl:
   file.managed:
     - name: /usr/bin/calicoctl
-    - source: https://github.com/projectcalico/calico-docker/releases/download/v0.18.0/calicoctl
-    - source_hash: sha256=694d2e0d0079980d75bc807fcb6626b18e5994638aa62743d45b906e742a0eed
-    - makedirs: True
-    - mode: 744
-
-calico-policy:
-  file.managed:
-    - name: /usr/bin/policy
-    - source: https://github.com/projectcalico/k8s-policy/releases/download/v0.1.3/policy
-    - source_hash: sha256=def1b53ec0bf3ec2dce9edb7b4252a514ccd6b06c7e738a324e0a3e9ecf12bbe
+    - source: https://github.com/projectcalico/calico-docker/releases/download/v0.19.0/calicoctl
+    - source_hash: sha256=6db00c94619e82d878d348c4e1791f8d2f0db59075f6c8e430fefae297c54d96
     - makedirs: True
     - mode: 744
 
@@ -31,19 +23,6 @@ calico-etcd:
                --initial-advertise-peer-urls http://{{ grains.id }}:6667
                --initial-cluster calico=http://{{ grains.id }}:6667
 
-calico-node:
-  cmd.run:
-    - name: calicoctl node
-    - unless: docker ps | grep calico-node
-    - env:
-      - ETCD_AUTHORITY: "{{ grains.id }}:6666"
-    - require:
-      - kmod: ip6_tables
-      - kmod: xt_set
-      - service: docker
-      - file: calicoctl
-      - cmd: calico-etcd
-
 calico-policy-agent:
   file.managed:
     - name: /etc/kubernetes/manifests/calico-policy-agent.manifest
@@ -59,12 +38,6 @@ calico-policy-agent:
     - require:
       - service: docker
       - service: kubelet
-      - cmd: calico-node
+      - cmd: calico-etcd
 
-ip6_tables:
-  kmod.present
-
-xt_set:
-  kmod.present
-
-{% endif %}
+{% endif -%}

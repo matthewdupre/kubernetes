@@ -10,7 +10,7 @@ spec:
   hostNetwork: true
   containers:
     - name: policyagent
-      image: calico/k8s-policy-agent:v0.1.3
+      image: calico/k8s-policy-agent:v0.1.4
       env:
       - name: ETCD_AUTHORITY
         value: "127.0.0.1:6666"

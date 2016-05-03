@@ -3,15 +3,15 @@
 calicoctl:
   file.managed:
     - name: /usr/bin/calicoctl
-    - source: https://github.com/projectcalico/calico-docker/releases/download/v0.18.0/calicoctl
-    - source_hash: sha256=694d2e0d0079980d75bc807fcb6626b18e5994638aa62743d45b906e742a0eed
+    - source: https://github.com/projectcalico/calico-docker/releases/download/v0.19.0/calicoctl
+    - source_hash: sha256=6db00c94619e82d878d348c4e1791f8d2f0db59075f6c8e430fefae297c54d96
     - makedirs: True
     - mode: 744
 
 calico-policy:
   file.managed:
     - name: /usr/bin/policy
-    - source: https://github.com/projectcalico/k8s-policy/releases/download/v0.1.3/policy
+    - source: https://github.com/projectcalico/k8s-policy/releases/download/v0.1.4/policy
     - source_hash: sha256=def1b53ec0bf3ec2dce9edb7b4252a514ccd6b06c7e738a324e0a3e9ecf12bbe
     - makedirs: True
     - mode: 744
@@ -22,6 +22,7 @@ calico-node:
     - unless: docker ps | grep calico-node
     - env:
       - ETCD_AUTHORITY: "{{ grains.api_servers }}:6666"
+      - CALICO_NETWORKING: "false"
     - require:
       - kmod: ip6_tables
       - kmod: xt_set
@@ -31,8 +32,8 @@ calico-node:
 calico-cni:
   file.managed:
     - name: /opt/cni/bin/calico
-    - source: https://github.com/projectcalico/calico-cni/releases/download/v1.2.0/calico
-    - source_hash: sha256=499d507666300c900596d1a4254e7a4eea900100bc73bd54bc903633afbfbcf4
+    - source: https://github.com/projectcalico/calico-cni/releases/download/v1.3.0/calico
+    - source_hash: sha256=2f65616cfca7d7b8967a62f179508d30278bcc72cef9d122ce4a5f6689fc6577
     - makedirs: True
     - mode: 744
 
@@ -54,18 +55,10 @@ calico-restart-kubelet:
       - cmd: calico-node
       - service: kubelet
 
-host-local:
-  file.managed:
-    - name: /opt/cni/bin/host-local
-    - source: https://f001.backblaze.com/file/calico/host-local
-    - source_hash: sha256=0eb6324764cd651072d53094808d6d15c4acb5c46a5d55d70edb0395309ee928
-    - makedirs: True
-    - mode: 744
-
 ip6_tables:
   kmod.present
 
 xt_set:
   kmod.present
 
-{% endif %}
+{% endif -%}

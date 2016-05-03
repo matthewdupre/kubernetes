@@ -15,6 +15,9 @@ base:
     - docker
 {% if pillar.get('network_provider', '').lower() == 'flannel' %}
     - flannel
+{% endif %}
+{% if pillar.get('policy_provider', '').lower() == 'calico' %}
+    - cni
 {% elif pillar.get('network_provider', '').lower() == 'kubenet' %}
     - cni
 {% elif pillar.get('network_provider', '').lower() == 'cni' %}
@@ -29,10 +32,6 @@ base:
 {% else %}
     - kube-proxy
 {% endif %}
-{% if pillar.get('policy_provider', '').lower() == 'calico' %}
-    - calico.node
-    - cni
-{% endif %}
 {% if pillar.get('enable_node_logging', '').lower() == 'true' and pillar['logging_destination'] is defined %}
   {% if pillar['logging_destination'] == 'elasticsearch' %}
     - fluentd-es
@@ -45,6 +44,9 @@ base:
 {% endif %}
     - logrotate
     - supervisor
+{% if pillar.get('policy_provider', '').lower() == 'calico' %}
+    - calico.node
+{% endif %}
 
   'roles:kubernetes-master':
     - match: grain
@@ -56,10 +58,6 @@ base:
 {% elif pillar.get('network_provider', '').lower() == 'kubenet' %}
     - cni
 {% elif pillar.get('network_provider', '').lower() == 'cni' %}
-    - cni
-{% endif %}
-{% if pillar.get('policy_provider', '').lower() == 'calico' %}
-    - calico.master
     - cni
 {% endif %}
     - kube-apiserver
@@ -86,4 +84,7 @@ base:
 {% endif %}
 {% if pillar.get('network_provider', '').lower() == 'opencontrail' %}
     - opencontrail-networking-master
+{% endif %}
+{% if pillar.get('policy_provider', '').lower() == 'calico' %}
+    - calico.master
 {% endif %}
