@@ -702,6 +702,7 @@ func ValidateNetworkPolicySpec(spec *extensions.NetworkPolicySpec, fldPath *fiel
 
 	// Validate ingress rules.
 	for _, i := range spec.Ingress {
+		// TODO: Update From to be a pointer to slice as soon as auto-generation supports it.
 		for _, f := range i.From {
 			numFroms := 0
 			allErrs := field.ErrorList{}

@@ -845,6 +845,7 @@ type NetworkPolicyIngressRule struct {
 	// If this field is empty, this rule matches no ports (no traffic matches).
 	// If this field is present and contains at least one item, then this rule allows traffic
 	// only if the traffic matches at least one port in the list.
+	// TODO: Update this to be a pointer to slice as soon as auto-generation supports it.
 	Ports []NetworkPolicyPort `json:"ports,omitempty"`
 
 	// List of sources which should be able to access the pods selected for this rule.
@@ -853,6 +854,7 @@ type NetworkPolicyIngressRule struct {
 	// If this field is empty, this rule matches no sources (no traffic matches).
 	// If this field is present and contains at least on item, this rule allows traffic only if the
 	// traffic matches at least one item in the from list.
+	// TODO: Update this to be a pointer to slice as soon as auto-generation supports it.
 	From []NetworkPolicyPeer `json:"from,omitempty"`
 }
 
