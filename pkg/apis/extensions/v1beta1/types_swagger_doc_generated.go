@@ -458,7 +458,7 @@ func (ListOptions) SwaggerDoc() map[string]string {
 
 var map_NetworkPolicy = map[string]string{
 	"metadata": "Standard object's metadata. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata",
-	"Spec":     "Specification of the desired behavior for this NetworkPolicy.",
+	"spec":     "Specification of the desired behavior for this NetworkPolicy.",
 }
 
 func (NetworkPolicy) SwaggerDoc() map[string]string {

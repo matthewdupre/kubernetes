@@ -815,7 +815,7 @@ type NetworkPolicy struct {
 	api.ObjectMeta       `json:"metadata,omitempty"`
 
 	// Specification of the desired behavior for this NetworkPolicy.
-	Spec NetworkPolicySpec
+	Spec NetworkPolicySpec `json:"spec,omitempty"`
 }
 
 type NetworkPolicySpec struct {

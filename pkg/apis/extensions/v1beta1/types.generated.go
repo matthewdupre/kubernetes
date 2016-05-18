@@ -19372,13 +19372,14 @@ func (x *NetworkPolicy) CodecEncodeSelf(e *codec1978.Encoder) {
 			_, _, _ = yysep2, yyq2, yy2arr2
 			const yyr2 bool = false
 			yyq2[0] = true
+			yyq2[1] = true
 			yyq2[2] = x.Kind != ""
 			yyq2[3] = x.APIVersion != ""
 			var yynn2 int
 			if yyr2 || yy2arr2 {
 				r.EncodeArrayStart(4)
 			} else {
-				yynn2 = 1
+				yynn2 = 0
 				for _, b := range yyq2 {
 					if b {
 						yynn2++
@@ -19406,14 +19407,20 @@ func (x *NetworkPolicy) CodecEncodeSelf(e *codec1978.Encoder) {
 			}
 			if yyr2 || yy2arr2 {
 				z.EncSendContainerState(codecSelfer_containerArrayElem1234)
-				yy9 := &x.Spec
-				yy9.CodecEncodeSelf(e)
+				if yyq2[1] {
+					yy9 := &x.Spec
+					yy9.CodecEncodeSelf(e)
+				} else {
+					r.EncodeNil()
+				}
 			} else {
-				z.EncSendContainerState(codecSelfer_containerMapKey1234)
-				r.EncodeString(codecSelferC_UTF81234, string("Spec"))
-				z.EncSendContainerState(codecSelfer_containerMapValue1234)
-				yy11 := &x.Spec
-				yy11.CodecEncodeSelf(e)
+				if yyq2[1] {
+					z.EncSendContainerState(codecSelfer_containerMapKey1234)
+					r.EncodeString(codecSelferC_UTF81234, string("spec"))
+					z.EncSendContainerState(codecSelfer_containerMapValue1234)
+					yy11 := &x.Spec
+					yy11.CodecEncodeSelf(e)
+				}
 			}
 			if yyr2 || yy2arr2 {
 				z.EncSendContainerState(codecSelfer_containerArrayElem1234)
@@ -19533,7 +19540,7 @@ func (x *NetworkPolicy) codecDecodeSelfFromMap(l int, d *codec1978.Decoder) {
 				yyv4 := &x.ObjectMeta
 				yyv4.CodecDecodeSelf(d)
 			}
-		case "Spec":
+		case "spec":
 			if r.TryDecodeAsNil() {
 				x.Spec = NetworkPolicySpec{}
 			} else {

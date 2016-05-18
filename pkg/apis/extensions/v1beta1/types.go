@@ -1110,7 +1110,7 @@ type NetworkPolicy struct {
 	v1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	// Specification of the desired behavior for this NetworkPolicy.
-	Spec NetworkPolicySpec `protobuf:"bytes,2,opt,name=spec"`
+	Spec NetworkPolicySpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
 }
 
 type NetworkPolicySpec struct {
