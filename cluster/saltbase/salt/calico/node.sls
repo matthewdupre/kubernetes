@@ -45,14 +45,21 @@ calico-cni-config:
     - mode: 644
     - template: jinja
 
-calico-restart-kubelet:
+calico-update-cbr0:
   cmd.run:
-    - name: service kubelet restart
+    - name: sed -i "s#CBR0_CIDR#$(ip addr list docker0 | grep -oP 'inet \K\S+')#" /etc/cni/net.d/10-calico.conf
     - require:
       - file: calico-cni
       - file: calico-cni-config
       - cmd: calico-node
       - service: kubelet
+      - service: docker
+
+calico-restart-kubelet:
+  cmd.run:
+    - name: service kubelet restart
+    - require:
+      - cmd: calico-update-cbr0
 
 ip6_tables:
   kmod.present
