@@ -9,8 +9,8 @@ metadata:
 spec:
   hostNetwork: true
   containers:
-    - name: policyagent
-      image: calico/k8s-policy-agent:v0.1.4
+    - name: policycontroller
+      image: caseydavenport/calico-policy-controller:latest
       env:
       - name: ETCD_AUTHORITY
         value: "127.0.0.1:6666"

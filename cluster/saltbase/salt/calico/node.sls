@@ -8,14 +8,6 @@ calicoctl:
     - makedirs: True
     - mode: 744
 
-calico-policy:
-  file.managed:
-    - name: /usr/bin/policy
-    - source: https://github.com/projectcalico/k8s-policy/releases/download/v0.1.4/policy
-    - source_hash: sha256=def1b53ec0bf3ec2dce9edb7b4252a514ccd6b06c7e738a324e0a3e9ecf12bbe
-    - makedirs: True
-    - mode: 744
-
 calico-node:
   cmd.run:
     - name: calicoctl node
@@ -47,7 +39,7 @@ calico-cni-config:
 
 calico-update-cbr0:
   cmd.run:
-    - name: sed -i "s#CBR0_CIDR#$(ip addr list docker0 | grep -oP 'inet \K\S+')#" /etc/cni/net.d/10-calico.conf
+    - name: sed -i "s#CBR0_CIDR#$(ip addr list cbr0 | grep -o 'inet [^ ]*' | awk '{print $2}')#" /etc/cni/net.d/10-calico.conf
     - require:
       - file: calico-cni
       - file: calico-cni-config
