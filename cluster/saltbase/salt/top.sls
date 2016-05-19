@@ -15,6 +15,9 @@ base:
     - docker
 {% if pillar.get('network_provider', '').lower() == 'flannel' %}
     - flannel
+{% endif %}
+{% if pillar.get('policy_provider', '').lower() == 'calico' %}
+    - cni
 {% elif pillar.get('network_provider', '').lower() == 'kubenet' %}
     - cni
 {% elif pillar.get('network_provider', '').lower() == 'cni' %}
@@ -41,6 +44,9 @@ base:
 {% endif %}
     - logrotate
     - supervisor
+{% if pillar.get('policy_provider', '').lower() == 'calico' %}
+    - calico.node
+{% endif %}
 
   'roles:kubernetes-master':
     - match: grain
@@ -78,4 +84,7 @@ base:
 {% endif %}
 {% if pillar.get('network_provider', '').lower() == 'opencontrail' %}
     - opencontrail-networking-master
+{% endif %}
+{% if pillar.get('policy_provider', '').lower() == 'calico' %}
+    - calico.master
 {% endif %}
