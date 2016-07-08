@@ -99,7 +99,7 @@ function split-commas {
 }
 
 # Downloads kubernetes binaries and kube-system manifest tarball, unpacks them,
-# and places them into suitable directories. Files are placed in /home/kubernetes. 
+# and places them into suitable directories. Files are placed in /home/kubernetes.
 function install-kube-binary-config {
   cd "${KUBE_HOME}"
   local -r server_binary_tar_urls=( $(split-commas "${SERVER_BINARY_TAR_URL}") )
