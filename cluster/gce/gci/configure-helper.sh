@@ -489,20 +489,25 @@ function start-kube-proxy {
 # $2: value for variable 'port'
 # $3: value for variable 'server_port'
 # $4: value for variable 'cpulimit'
-# $5: pod name, which should be either etcd or etcd-events
+# $5: value for variable 'listen_address'
+# $6: value for variable 'advertise_address'
+# $7: pod name, which should be either etcd, etcd-events, or etcd-calico
+
 function prepare-etcd-manifest {
-  local -r temp_file="/tmp/$5"
+  local -r temp_file="/tmp/$7"
   cp "${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/etcd.manifest" "${temp_file}"
   sed -i -e "s@{{ *suffix *}}@$1@g" "${temp_file}"
   sed -i -e "s@{{ *port *}}@$2@g" "${temp_file}"
   sed -i -e "s@{{ *server_port *}}@$3@g" "${temp_file}"
   sed -i -e "s@{{ *cpulimit *}}@\"$4\"@g" "${temp_file}"
+  sed -i -e "s@{{ *listen_address *}}@$5@g" "${temp_file}"
+  sed -i -e "s@{{ *advertise_address *}}@$6@g" "${temp_file}"
   # Replace the volume host path.
   sed -i -e "s@/mnt/master-pd/var/etcd@/mnt/disks/master-pd/var/etcd@g" "${temp_file}"
   mv "${temp_file}" /etc/kubernetes/manifests
 }
 
-# Starts etcd server pod (and etcd-events pod if needed).
+# Starts etcd server pod (and etcd-events and etcd-calico pods if needed).
 # More specifically, it prepares dirs and files, sets the variable value
 # in the manifests, and copies them to /etc/kubernetes/manifests.
 function start-etcd-servers {
@@ -520,10 +525,23 @@ function start-etcd-servers {
     rm -f /etc/init.d/etcd
   fi
   prepare-log-file /var/log/etcd.log
-  prepare-etcd-manifest "" "4001" "2380" "200m" "etcd.manifest"
+  prepare-etcd-manifest "" "4001" "2380" "150m" "127.0.0.1" "127.0.0.1" "etcd.manifest"
 
   prepare-log-file /var/log/etcd-events.log
-  prepare-etcd-manifest "-events" "4002" "2381" "100m" "etcd-events.manifest"
+  prepare-etcd-manifest "-events" "4002" "2381" "50m" "127.0.0.1" "127.0.0.1" "etcd-events.manifest"
+
+  if [[ "${NETWORK_POLICY_PROVIDER:-}" == "calico" ]]; then
+    prepare-log-file /var/log/etcd-calico.log
+    PUBLIC_IP=$(ifconfig eth0 | grep 'inet ' | awk '{print $2}')
+    prepare-etcd-manifest "-calico" "6666" "2382" "60m" "0.0.0.0" "$PUBLIC_IP" "etcd-calico.manifest"
+  fi
+}
+
+# Starts Calico policy controller pod.
+# More specifically, it prepares dirs and files, sets the variable value
+# in the manifests, and copies them to /etc/kubernetes/manifests.
+function start-calico-policy-controller {
+  cp "${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/calico-policy-controller.manifest" /etc/kubernetes/manifests
 }
 
 # Calculates the following variables based on env variables, which will be used
@@ -981,6 +999,9 @@ if [[ "${KUBERNETES_MASTER:-}" == "true" ]]; then
   start-kube-addons
   start-cluster-autoscaler
   start-lb-controller
+  if [[ "${NETWORK_POLICY_PROVIDER:-}" == "calico" ]]; then
+    start-calico-policy-controller
+  fi
 else
   start-kube-proxy
   # Kube-registry-proxy.

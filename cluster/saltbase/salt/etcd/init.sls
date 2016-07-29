@@ -66,6 +66,8 @@ touch /var/log/etcd-events.log:
         port: 4001
         server_port: 2380
         cpulimit: '"200m"'
+        listen_address: 127.0.0.1
+        advertise_address: 127.0.0.1
 
 /etc/kubernetes/manifests/etcd-events.manifest:
   file.managed:
@@ -81,3 +83,5 @@ touch /var/log/etcd-events.log:
         port: 4002
         server_port: 2381
         cpulimit: '"100m"'
+        listen_address: 127.0.0.1
+        advertise_address: 127.0.0.1
